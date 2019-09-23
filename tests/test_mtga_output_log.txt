@@ -35,6 +35,7 @@
   {
     "name": "Kethis Combo",
     "format": "Standard",
+    "deckTileId": 69501,
     "mainDeck": [
       69996,
       4,
@@ -51,6 +52,7 @@
   {
     "name": "Empty Deck",
     "format": "Standard",
+    "deckTileId": 66499,
     "mainDeck": [
     ],
     "sideboard": [

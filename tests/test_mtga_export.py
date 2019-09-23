@@ -110,6 +110,8 @@ class Test_MtgaLog(unittest.TestCase):
         self.assertEqual(card.pretty_name, 'Lazav, the Multifarious')
         self.assertEqual(count, 1)
 
+        self.assertEqual(kethis_deck.deckbox_image.pretty_name, 'Fblthp, the Lost')
+
 class Test_Scryfall(unittest.TestCase):
     """Test the scryfall module"""
 

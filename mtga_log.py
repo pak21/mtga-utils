@@ -100,6 +100,12 @@ class MtgaLog(object):
             if card is not None:
                 yield [mtga_id, card, count]
 
+    def lookup_card(self, mtga_id):
+        try:
+            return all_mtga_cards.find_one(mtga_id)
+        except ValueError as exception:
+            return self._fetch_card_from_scryfall(mtga_id)
+
     def get_collection(self):
         """Generator for MTGA collection"""
         collection = self.get_last_json_block('<== ' + MTGA_COLLECTION_KEYWORD)
@@ -194,6 +200,8 @@ class MtgaDeckList(object):
 
         sideboard_pairs = zip(*[iter(self.deck_list_json['sideboard'])]*2)
         self.sideboard = card_lookup.lookup_cards(sideboard_pairs)
+
+        self.deckbox_image = card_lookup.lookup_card(self.deck_list_json['deckTileId'])
 
     @property
     def name(self):
