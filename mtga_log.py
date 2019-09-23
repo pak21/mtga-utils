@@ -13,18 +13,6 @@ def _mtga_file_path(filename):
     components = base + ["LocalLow", "Wizards of the Coast", "MTGA", filename]
     return os.path.join(*components)
 
-def _make_deck_list(list_of_pairs, card_lookup):
-    for (mtga_id, count) in list_of_pairs:
-        try:
-            card = all_mtga_cards.find_one(mtga_id)
-        except ValueError as exception:
-            yield [mtga_id, MtgaUnknownCard(exception), count]
-            #Card not found, try to get it from scryfall
-            card = card_lookup._fetch_card_from_scryfall(mtga_id)
-
-        if card is not None:
-            yield [mtga_id, card, count]
-
 MTGA_COLLECTION_KEYWORD = "PlayerInventory.GetPlayerCardsV3"
 MTGA_DECK_LISTS_KEYWORD = "Deck.GetDeckListsV3"
 MTGA_INVENTORY_KEYWORD = "PlayerInventory.GetPlayerInventory"
@@ -100,10 +88,22 @@ class MtgaLog(object):
             card = scryfall.ScryfallError(scryfall_error)
         return card
 
+    def lookup_cards(self, list_of_pairs):
+        for (mtga_id, count) in list_of_pairs:
+            try:
+                card = all_mtga_cards.find_one(mtga_id)
+            except ValueError as exception:
+                yield [mtga_id, MtgaUnknownCard(exception), count]
+                #Card not found, try to get it from scryfall
+                card = self._fetch_card_from_scryfall(mtga_id)
+
+            if card is not None:
+                yield [mtga_id, card, count]
+
     def get_collection(self):
         """Generator for MTGA collection"""
         collection = self.get_last_json_block('<== ' + MTGA_COLLECTION_KEYWORD)
-        return _make_deck_list(iteritems(collection), self)
+        return self.lookup_cards(iteritems(collection))
 
     def get_inventory(self):
         """Convenience function to get the player's inventory"""
@@ -190,10 +190,10 @@ class MtgaDeckList(object):
         self.deck_list_json = deck_list_json
 
         maindeck_pairs = zip(*[iter(self.deck_list_json['mainDeck'])]*2)
-        self.maindeck = _make_deck_list(maindeck_pairs, card_lookup)
+        self.maindeck = card_lookup.lookup_cards(maindeck_pairs)
 
         sideboard_pairs = zip(*[iter(self.deck_list_json['sideboard'])]*2)
-        self.sideboard = _make_deck_list(sideboard_pairs, card_lookup)
+        self.sideboard = card_lookup.lookup_cards(sideboard_pairs)
 
     @property
     def name(self):
