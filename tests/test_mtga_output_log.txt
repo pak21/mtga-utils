@@ -41,6 +41,13 @@
         }
     }}
 
+<== TestArray
+[
+  {
+    "key": "value"
+  }
+]
+
 blah
 { "foo" : "bar" }
 

@@ -57,10 +57,10 @@ class MtgaLog(object):
                     bucket = []
                     copy = True
 
-                levels += line.count('{')
-                levels -= line.count('}')
+                levels += line.count('{') + line.count('[')
+                levels -= line.count('}') + line.count(']')
 
-                if line.count('}') > 0 and levels == 0:
+                if (line.count('}') > 0 or line.count(']') > 0) and levels == 0:
                     copy = False
         return bucket
 

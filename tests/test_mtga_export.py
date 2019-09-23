@@ -27,6 +27,12 @@ class Test_MtgaLog(unittest.TestCase):
             , '1'
         )
 
+    def test_get_last_json_block_with_array(self):
+        result = self.mlog.get_last_json_block('<== TestArray')
+        self.assertEqual(
+            result[0].get('key'), 'value'
+        )
+
     def test_get_last_json_block2(self):
         result = self.mlog.get_last_json_block('blah')
         self.assertEqual(result.get('foo'), 'bar')
