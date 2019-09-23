@@ -30,6 +30,34 @@
   "vaultProgress": 5.6
 }
 
+<== Deck.GetDeckListsV3(1)
+[
+  {
+    "name": "Kethis Combo",
+    "format": "Standard",
+    "mainDeck": [
+      69996,
+      4,
+      67552,
+      3
+    ],
+    "sideboard": [
+      67206,
+      2,
+      68645,
+      1
+    ]
+  },
+  {
+    "name": "Empty Deck",
+    "format": "Standard",
+    "mainDeck": [
+    ],
+    "sideboard": [
+    ]
+  }
+]
+
 <== TestKey
 {
     "test1":

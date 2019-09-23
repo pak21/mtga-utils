@@ -13,8 +13,22 @@ def _mtga_file_path(filename):
     components = base + ["LocalLow", "Wizards of the Coast", "MTGA", filename]
     return os.path.join(*components)
 
+def _make_deck_list(list_of_pairs, card_lookup):
+    for (mtga_id, count) in list_of_pairs:
+        try:
+            card = all_mtga_cards.find_one(mtga_id)
+        except ValueError as exception:
+            yield [mtga_id, MtgaUnknownCard(exception), count]
+            #Card not found, try to get it from scryfall
+            card = card_lookup._fetch_card_from_scryfall(mtga_id)
+
+        if card is not None:
+            yield [mtga_id, card, count]
+
 MTGA_COLLECTION_KEYWORD = "PlayerInventory.GetPlayerCardsV3"
+MTGA_DECK_LISTS_KEYWORD = "Deck.GetDeckListsV3"
 MTGA_INVENTORY_KEYWORD = "PlayerInventory.GetPlayerInventory"
+
 MTGA_WINDOWS_LOG_FILE = _mtga_file_path("output_log.txt")
 MTGA_WINDOWS_FORMATS_FILE = _mtga_file_path("formats.json")
 
@@ -89,22 +103,17 @@ class MtgaLog(object):
     def get_collection(self):
         """Generator for MTGA collection"""
         collection = self.get_last_json_block('<== ' + MTGA_COLLECTION_KEYWORD)
-        for (mtga_id, count) in iteritems(collection):
-            try:
-                card = all_mtga_cards.find_one(mtga_id)
-            except ValueError as exception:
-                yield [mtga_id, MtgaUnknownCard(exception), count]
-                #Card not found, try to get it from scryfall
-                card = self._fetch_card_from_scryfall(mtga_id)
-
-            if card is not None:
-                yield [mtga_id, card, count]
+        return _make_deck_list(iteritems(collection), self)
 
     def get_inventory(self):
         """Convenience function to get the player's inventory"""
         inventory_dict = self.get_last_json_block('<== ' + MTGA_INVENTORY_KEYWORD)
         return MtgaInventory(inventory_dict)
 
+    def get_deck_lists(self):
+        """Get all deck lists"""
+        deck_lists_json = self.get_last_json_block('<== ' + MTGA_DECK_LISTS_KEYWORD)
+        return [MtgaDeckList(j, self) for j in deck_lists_json]
 
 class MtgaFormats(object):
     """Process MTGA/Unity formats file"""
@@ -173,3 +182,23 @@ class MtgaInventory(object):
             'Rare': self.inventory_dict['wcRare'],
             'Mythic Rare': self.inventory_dict['wcMythic']
         }
+
+class MtgaDeckList(object):
+    """Wrapper for a deck list"""
+
+    def __init__(self, deck_list_json, card_lookup):
+        self.deck_list_json = deck_list_json
+
+        maindeck_pairs = zip(*[iter(self.deck_list_json['mainDeck'])]*2)
+        self.maindeck = _make_deck_list(maindeck_pairs, card_lookup)
+
+        sideboard_pairs = zip(*[iter(self.deck_list_json['sideboard'])]*2)
+        self.sideboard = _make_deck_list(sideboard_pairs, card_lookup)
+
+    @property
+    def name(self):
+        return self.deck_list_json['name']
+
+    @property
+    def format(self):
+        return self.deck_list_json['format']
