@@ -16,6 +16,7 @@ def _mtga_file_path(filename):
 MTGA_COLLECTION_KEYWORD = "PlayerInventory.GetPlayerCardsV3"
 MTGA_DECK_LISTS_KEYWORD = "Deck.GetDeckListsV3"
 MTGA_INVENTORY_KEYWORD = "PlayerInventory.GetPlayerInventory"
+MTGA_PRECON_DECK_LISTS_KEYWORD = "Deck.GetPreconDecksV3"
 
 MTGA_WINDOWS_LOG_FILE = _mtga_file_path("output_log.txt")
 MTGA_WINDOWS_FORMATS_FILE = _mtga_file_path("formats.json")
@@ -119,6 +120,11 @@ class MtgaLog(object):
     def get_deck_lists(self):
         """Get all deck lists"""
         deck_lists_json = self.get_last_json_block('<== ' + MTGA_DECK_LISTS_KEYWORD)
+        return [MtgaDeckList(j, self) for j in deck_lists_json]
+
+    def get_preconstructed_deck_lists(self):
+        """Get preconstructed deck lists"""
+        deck_lists_json = self.get_last_json_block('<== ' + MTGA_PRECON_DECK_LISTS_KEYWORD)
         return [MtgaDeckList(j, self) for j in deck_lists_json]
 
 class MtgaFormats(object):
