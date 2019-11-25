@@ -37,6 +37,18 @@ class Test_MtgaLog(unittest.TestCase):
         result = self.mlog.get_last_json_block('blah')
         self.assertEqual(result.get('foo'), 'bar')
 
+    def test_get_last_json_block_new_format(self):
+        result = self.mlog.get_last_json_block('<== NewFormat')
+        self.assertEqual(
+            result.get('payload').get('68286'), 1
+        )
+
+    def test_get_last_json_block_new_format_array(self):
+        result = self.mlog.get_last_json_block('<== NewArrayFormat')
+        self.assertEqual(
+            result.get('payload')[0].get('key'), 'value'
+        )
+
     @parameterized.expand([
         ["67682", "3"],
         ["123",   "4"],

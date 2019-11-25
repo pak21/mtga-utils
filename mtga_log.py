@@ -2,8 +2,9 @@ from __future__ import print_function
 from future.utils import iteritems
 import os
 import simplejson as json
-from mtga.set_data import all_mtga_cards
 import scryfall
+import re
+
 
 def _mtga_file_path(filename):
     """Get the full path to the specified MTGA file"""
@@ -19,6 +20,12 @@ MTGA_INVENTORY_KEYWORD = "PlayerInventory.GetPlayerInventory"
 
 MTGA_WINDOWS_LOG_FILE = _mtga_file_path("output_log.txt")
 MTGA_WINDOWS_FORMATS_FILE = _mtga_file_path("formats.json")
+
+
+def find_one_mtga_card(mtga_id):
+    from mtga.set_data import all_mtga_cards
+    return all_mtga_cards.find_one(mtga_id)
+
 
 class MtgaLogParsingError(ValueError):
     """Exception raised when parsing json data fails"""
@@ -49,20 +56,28 @@ class MtgaLog(object):
         """
         bucket = []
         copy = False
-        levels = 0
+        dict_levels = 0
+        list_levels = 0
+
         with open(self.log_filename) as logfile:
             for line in logfile:
-                if copy:
-                    bucket.append(line)
-
                 if line.find(keyword) > -1:
                     bucket = []
+                    if line.count('{') > 0 or line.count('[') > 0:
+                        line = re.sub(r'.*'+keyword, '', line)
+                    else:
+                        line = ""
                     copy = True
 
-                levels += line.count('{') + line.count('[')
-                levels -= line.count('}') + line.count(']')
+                if copy and line:
+                    bucket.append(line)
 
-                if (line.count('}') > 0 or line.count(']') > 0) and levels == 0:
+                dict_levels += line.count('{') - line.count('}')
+                list_levels += line.count('[') - line.count(']')
+
+                if line.count('}') > 0 and dict_levels == 0 and list_levels == 0:
+                    copy = False
+                if line.count(']') > 0 and list_levels == 0 and dict_levels == 0:
                     copy = False
         return bucket
 
@@ -91,7 +106,7 @@ class MtgaLog(object):
     def lookup_cards(self, list_of_pairs):
         for (mtga_id, count) in list_of_pairs:
             try:
-                card = all_mtga_cards.find_one(mtga_id)
+                card = find_one_mtga_card(mtga_id)
             except ValueError as exception:
                 yield [mtga_id, MtgaUnknownCard(exception), count]
                 #Card not found, try to get it from scryfall
@@ -102,58 +117,26 @@ class MtgaLog(object):
 
     def lookup_card(self, mtga_id):
         try:
-            return all_mtga_cards.find_one(mtga_id)
+            return find_one_mtga_card(mtga_id)
         except ValueError as exception:
             return self._fetch_card_from_scryfall(mtga_id)
 
     def get_collection(self):
         """Generator for MTGA collection"""
         collection = self.get_last_json_block('<== ' + MTGA_COLLECTION_KEYWORD)
+        collection = collection.get('payload', collection)
         return self.lookup_cards(iteritems(collection))
 
     def get_inventory(self):
         """Convenience function to get the player's inventory"""
         inventory_dict = self.get_last_json_block('<== ' + MTGA_INVENTORY_KEYWORD)
+        inventory_dict = inventory_dict.get('payload', inventory_dict)
         return MtgaInventory(inventory_dict)
 
     def get_deck_lists(self):
         """Get all deck lists"""
         deck_lists_json = self.get_last_json_block('<== ' + MTGA_DECK_LISTS_KEYWORD)
         return [MtgaDeckList(j, self) for j in deck_lists_json]
-
-class MtgaFormats(object):
-    """Process MTGA/Unity formats file"""
-
-    def __init__(self, formats_filename):
-        self.formats_filename = formats_filename
-
-    def _get_formats_json(self):
-        """Gets the formats json"""
-        with open(self.formats_filename) as formats_file:
-            return json.load(formats_file)
-
-    def get_format_sets(self, mtg_format):
-        """Returns list of current sets in standard format"""
-        try:
-            json_data = self._get_formats_json()
-        except ValueError as exception:
-            raise MtgaLogParsingError(exception)
-
-        sets = []
-        for item in json_data:
-            if item.get("name").lower() == str(mtg_format):
-                for mtga_set in item.get("sets"):
-                    sets.append(mtga_set)
-                    if mtga_set == "DAR":
-                        sets.append("DOM")
-        return sets
-
-    def get_set_info(self, mtga_set):
-        return scryfall.get_set_info(mtga_set)
-
-    def get_set_card_count(self, mtga_set):
-        set_info = self.get_set_info(mtga_set)
-        return set_info.get('card_count', 0)
 
 class MtgaInventory(object):
     """Wrapper for the player's inventory"""
@@ -187,6 +170,23 @@ class MtgaInventory(object):
             'Uncommon': self.inventory_dict['wcUncommon'],
             'Rare': self.inventory_dict['wcRare'],
             'Mythic Rare': self.inventory_dict['wcMythic']
+        }
+
+    def __str__(self):
+        """String representation of the inventory"""
+        return str(self.inventory())
+
+    def inventory_raw(self):
+        return self.inventory_dict
+
+    def inventory(self):
+        """Dictionary representation of the inventory"""
+        return {
+            'Gems': self.gems,
+            'Gold': self.gold,
+            'Tokens': self.tokens,
+            'VaultProgress': self.vault_progress,
+            'Wildcards': self.wildcards
         }
 
 class MtgaDeckList(object):

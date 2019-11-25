@@ -2,18 +2,47 @@
 """Export your card collection from MTG: Arena
     Notes:
         Card Collection - PlayerInventory.GetPlayerCardsV3
-        Log File in windows - "%AppData%\LocalLow\Wizards Of The Coast\MTGA\output_log.txt"
+        Log File in windows - "%AppData%\\LocalLow\\Wizards Of The Coast\\MTGA\\output_log.txt"
 """
 from __future__ import print_function
+import logging
 import argparse
 import shlex
 import sys
 import os
 from mtga_log import *
+from mtga_formats import MtgaFormats, normalize_set
 import scryfall
 
+__version__ = "0.3.4"
 
-__version__ = "0.2.8"
+
+def print_arrays_with_keys(data, prefix='', separator='|', last_separator='='):
+    """Prints array branches on one line separated with a character.
+
+    Args:
+        prefix (string): Prefix to use at the begining of the line.
+            Defaults to empty string.
+        separator (string): Character or string to use as value/key separator.
+            Defaults to pipe '|'.
+
+    Examples:
+        >>> print_arrays_with_keys({'a': {'bb': {'ccc': 1}}})
+        a|bb|ccc=1
+
+        >>> array = {'a': { 'aa': 1, 'bb': 2}, 'b': '3'}
+        >>> print_arrays_with_keys(array, 'prefix', ':', '=>')
+        prefix:a:aa=>1
+        prefix:a:bb=>2
+        prefix:b=>3
+    """
+    if isinstance(data, (list, dict, tuple)):
+        if prefix:
+            prefix += separator
+        for key, value in iteritems(data):
+            print_arrays_with_keys(value, prefix + key, separator, last_separator)
+        return
+    print(prefix + last_separator + str(data))
 
 
 def get_argparse_parser():
@@ -24,7 +53,7 @@ def get_argparse_parser():
     """
     parser = argparse.ArgumentParser(description="Parse MTGA log file")
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
-    parser.add_argument("-l", "--log_file", help="MTGA/Unity log file [Win: %%AppData%%\LocalLow\Wizards Of The Coast\MTGA\output_log.txt]", nargs=1)
+    parser.add_argument("-l", "--log_file", help="MTGA/Unity log file [Win: %%AppData%%\\LocalLow\\Wizards Of The Coast\\MTGA\\output_log.txt]", nargs=1)
     parser.add_argument("-k", "--keyword", help="List json under keyword", nargs=1)
     parser.add_argument("--collids", help="List collection ids", action="store_true")
     parser.add_argument("-c", "--collection", help="List collection with card data", action="store_true")
@@ -37,10 +66,12 @@ def get_argparse_parser():
         ]
     )
     parser.add_argument("-gf", "--goldfish", help="Export in mtggoldfish format", action="store_true")
-    parser.add_argument("-ct", "--completiontracker", help="Export set completion", action="store_true")
     parser.add_argument("-ds", "--deckstats", help="Export in deckstats format", action="store_true")
-    parser.add_argument("-f", "--file", help="Store export to file", nargs=1)
-    parser.add_argument("--debug", help="Show debug messages", action="store_true")
+    parser.add_argument("-ct", "--completiontracker", help="Export set completion", action="store_true")
+    parser.add_argument("-i",  "--inventory", help="Print inventory", action="store_true")
+    parser.add_argument("-ij", "--inventoryjson", help="Print inventory as json", action="store_true")
+    parser.add_argument("-f",  "--file", help="Store export to file", nargs=1)
+    parser.add_argument("--log", help="Log level", nargs="?", default="INFO")
     return parser
 
 
@@ -64,6 +95,14 @@ def parse_arguments(args_string=None):
     return args
 
 
+def setup_logging(args):
+    """Setup logging for this script"""
+    numeric_level = getattr(logging, args.log.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % args.log)
+    logging.basicConfig(level=numeric_level)
+
+
 def get_keyword_data(args, mlog):
     """Get json data for specific keyword as dict"""
     keyword = args.keyword[0]
@@ -71,40 +110,37 @@ def get_keyword_data(args, mlog):
         data = mlog.get_last_json_block('<== ' + keyword)
     except MtgaLogParsingError as error:
         print('Error: Could not parse json data: ', error)
-        if args.debug:
-            print("Got:")
-            print(mlog.get_last_keyword_block('<== ' + keyword))
+        logging.debug("Got:")
+        logging.debug(mlog.get_last_keyword_block('<== ' + keyword))
         return {}
     return data
 
 
 def get_collection(args, mlog):
     """Get collection and print messages"""
+    from mtga.models.card import Card
+
     try:
         for (mtga_id, card, count) in mlog.get_collection():
             if isinstance(card, MtgaUnknownCard):
                 print('Info: Unknown card in collection: %s (Will fetch it from Scryfall)' % card)
             elif isinstance(card, scryfall.ScryfallError):
                 print('Warning: Could not fetch unknown card from scryfall: %s' % card)
+            elif not isinstance(card, Card):
+                print('Warning: Unexpected card format [id=%s, card=%s]' % (mtga_id, str(card)))
             else:
                 yield [card, count]
     except MtgaLogParsingError as error:
         print('Error: Could not parse json data: ', error)
-        if args.debug:
-            print("Got:")
-            print(mlog.get_last_keyword_block('<== ' + MTGA_COLLECTION_KEYWORD))
-
-
-def normalize_set(set_id, conversion={}):
-    """Convert set id readable by goldfish/deckstats"""
-    conversion.update({'DAR': 'DOM'})
-    return conversion.get(set_id.upper(), set_id.upper())
+        logging.debug("Got:")
+        logging.debug(mlog.get_last_keyword_block('<== ' + MTGA_COLLECTION_KEYWORD))
 
 
 def main(args_string=None):
     output = []
 
     args = parse_arguments(args_string)
+    setup_logging(args)
 
     log_file = MTGA_WINDOWS_LOG_FILE
     formats_file = MTGA_WINDOWS_FORMATS_FILE
@@ -126,6 +162,7 @@ def main(args_string=None):
 
     if args.collection:
         for card, count in get_collection(args, mlog):
+            logging.debug(str(card))
             print(card.mtga_id, card, count)
 
     if args.export:
@@ -171,6 +208,14 @@ def main(args_string=None):
             output.append('"%s",%s,"%s",%s,%s' % (
                 card.pretty_name, count, card_set, 0, 0,
             ))
+
+    if args.inventory:
+        inventory_dict = mlog.get_inventory().inventory()
+        print_arrays_with_keys(inventory_dict, '', ':')
+
+    if args.inventoryjson:
+        inventory_dict = mlog.get_inventory().inventory()
+        output.append(str(inventory_dict))
 
     if output != []:
         output_str = '\n'.join(output)

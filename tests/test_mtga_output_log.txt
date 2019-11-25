@@ -83,3 +83,6 @@ blah
 
 invalid
 { aa : bb }
+
+<== NewFormat {"id":345,"payload":{"68286":1}}
+<== NewArrayFormat {"id":1,"payload":[{"key":"value"}]}
