@@ -136,6 +136,7 @@ class MtgaLog(object):
     def get_deck_lists(self):
         """Get all deck lists"""
         deck_lists_json = self.get_last_json_block('<== ' + MTGA_DECK_LISTS_KEYWORD)
+        deck_lists_json = deck_lists_json.get('payload', deck_lists_json)
         return [MtgaDeckList(j, self) for j in deck_lists_json]
 
 class MtgaInventory(object):
