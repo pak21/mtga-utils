@@ -205,6 +205,10 @@ class MtgaDeckList(object):
         self.deckbox_image = card_lookup.lookup_card(self.deck_list_json['deckTileId'])
 
     @property
+    def deck_id(self):
+        return self.deck_list_json['id']
+
+    @property
     def name(self):
         return self.deck_list_json['name']
 
